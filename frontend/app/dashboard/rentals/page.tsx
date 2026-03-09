@@ -4,8 +4,7 @@ import RentalCard from "@/components/RentalCard";
 import { getRentals } from "@/lib/api";
 
 export default function RentalsPage() {
-  const [rentals, setRentals] = useState([]);
-
+const [rentals, setRentals] = useState<{id: number; itemName: string; rentedAt: string; status: string;}[]>([]);
   useEffect(() => {
     getRentals().then(setRentals);
   }, []);

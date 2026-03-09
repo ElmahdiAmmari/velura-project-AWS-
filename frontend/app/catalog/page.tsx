@@ -4,8 +4,7 @@ import ItemCard from "@/components/ItemCard";
 import { getItems } from "@/lib/api";
 
 export default function CatalogPage() {
-  const [items, setItems] = useState([]);
-
+const [items, setItems] = useState<{id: number; name: string; brand: string; size: string; price: number;}[]>([]);
   useEffect(() => {
     getItems().then(setItems);
   }, []);

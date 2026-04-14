@@ -2,7 +2,7 @@ name: Velura Cloud Platform CI
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [ main, Frontend-Mouatassem ]
   pull_request:
     branches: [ main ]
 
@@ -44,7 +44,7 @@ jobs:
           SECRET_KEY: ${{ secrets.BACKEND_SECRET_KEY }}
         run: |
           cd backend
-          python test_app.py
+          python test_main.py
 
   # ÉTAPE 2 : BUILD DES IMAGES DOCKER
   build-images:

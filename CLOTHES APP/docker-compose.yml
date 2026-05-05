@@ -1,0 +1,135 @@
+version: "3.8"
+services:
+
+  phpmyadmin:
+    image: phpmyadmin:latest
+    container_name: clothes_phpmyadmin
+    restart: always
+    ports:
+      - "8081:80"
+    environment:
+      PMA_HOST: mysql          # connects to your mysql container
+      PMA_PORT: 3306
+      MYSQL_ROOT_PASSWORD: rootpassword
+    depends_on:
+      mysql:
+        condition: service_healthy
+  
+  mysql:
+    image: mysql:8.0
+    container_name: clothes_mysql
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: clothes_rental
+    ports:
+      - "3307:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-prootpassword"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+  
+  auth-service:
+    build: 
+      context: .
+      dockerfile: Dockerfile.Auth
+    container_name: clothes_auth
+    restart: always
+    ports:
+      - "5001:5001"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    
+
+  catalog-service:
+    build: 
+      context: .
+      dockerfile: Dockerfile.Catalog
+    ports:
+      - "5002:5002"
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+  rental-service:
+    build: 
+      context: .
+      dockerfile: Dockerfile.Rental
+    ports:
+      - "5003:5003"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      auth-service:
+        condition: service_started   # rental calls auth to verify tokens
+
+  admin-service:
+    build: 
+      context: .
+      dockerfile: Dockerfile.Admin
+    ports:
+      - "5004:5004"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      auth-service:
+        condition: service_started   # admin calls auth to verify tokens
+  
+  frontend:
+    build: 
+      context: .
+      dockerfile: Dockerfile.Frontend
+    ports:
+      - "8080:80"             # visit http://localhost:8080
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.12.0
+    container_name: clothes_elasticsearch
+    restart: always
+    environment:
+      - discovery.type=single-node #Runs Elasticsearch as one single machine (not a cluster).
+      - xpack.security.enabled=false #false->Turns security OFF (no login, no passwords)
+      - ES_JAVA_OPTS=-Xms512m -Xmx512m #Elasticsearch is limited to 0.5 GB RAM
+    ports:
+      - "9200:9200"
+    volumes:
+      - es_data:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s http://localhost:9200/_cluster/health | grep -q 'yellow\\|green'"]
+      interval: 10s
+      timeout: 10s
+      retries: 20
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.12.0
+    container_name: clothes_kibana
+    restart: always
+    ports:
+      - "5601:5601"
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+      -  XPACK_ENCRYPTEDSAVEDOBJECTS_ENCRYPTIONKEY=a7f3k9x2m8p4q1w6e5r0t3y7u2i8o4l1 #Tells Kibana to encrypt sensitive saved objects (like alerting rules, connector credentials, API keys stored in Kibana).
+    depends_on:
+      elasticsearch:
+        condition: service_healthy 
+
+  filebeat:
+    image: docker.elastic.co/beats/filebeat:8.12.0
+    container_name: clothes_filebeat
+    restart: always
+    user: root
+    volumes:
+      - ./filebeat.yml:/usr/share/filebeat/filebeat.yml:ro #Provides Filebeat with its configuration file.
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro #Allows Filebeat to read logs from Docker containers.
+      - /var/run/docker.sock:/var/run/docker.sock:ro #Allows Filebeat to communicate with the Docker engine.
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    command: filebeat -e -strict.perms=false
+  
+volumes:
+  mysql_data:
+  es_data:

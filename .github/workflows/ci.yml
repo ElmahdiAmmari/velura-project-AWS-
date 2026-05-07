@@ -1,16 +1,13 @@
 name: Velura Cloud Platform CI/CD
 
-# Déclenchement automatique à chaque push sur la branche main
 on:
   push:
     branches: [ main ]
 
 jobs:
-  # ÉTAPE 1 : VALIDATION (Test du Backend)
+  # --- ÉTAPE 1 : VALIDATION ---
   test-backend:
     runs-on: ubuntu-latest
-    
-    # On lance une base de données éphémère pour les tests
     services:
       db:
         image: postgres:15
@@ -42,41 +39,44 @@ jobs:
 
       - name: Run Backend Tests
         env:
-          # On utilise l'IP de l'hôte pour Docker car le service db est mappé sur 5432
           DATABASE_URL: postgresql://postgres:password@localhost:5432/velura_db
           SECRET_KEY: ${{ secrets.BACKEND_SECRET_KEY }}
         run: |
           cd backend
           python test_main.py
 
-  # ÉTAPE 2 : LIVRAISON (Build et Push sur Docker Hub)
+  # --- ÉTAPE 2 : LIVRAISON (BUILD ET PUSH) ---
   build-and-push:
-    needs: test-backend # Sécurité : On ne livre rien si les tests échouent
+    needs: test-backend
     runs-on: ubuntu-latest
     
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      # Configuration du moteur de build Docker
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      # Connexion au Registre (Utilise tes secrets GitHub)
       - name: Login to Docker Hub
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_PASSWORD }} # Ton Access Token (PAT)
+          password: ${{ secrets.DOCKER_PASSWORD }}
 
+      # Build et Push du Backend
       - name: Build & Push Backend
         uses: docker/build-push-action@v5
         with:
           context: ./backend
-          push: true
+          push: true  # <--- C'EST ICI QUE LE PUSH SE PASSE
           tags: ${{ secrets.DOCKER_USERNAME }}/velura-backend:latest
 
+      # Build et Push du Frontend
       - name: Build & Push Frontend
         uses: docker/build-push-action@v5
         with:
           context: ./frontend
-          push: true
+          push: true  # <--- C'EST ICI QUE LE PUSH SE PASSE
           tags: ${{ secrets.DOCKER_USERNAME }}/velura-frontend:latest

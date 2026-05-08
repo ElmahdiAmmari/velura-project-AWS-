@@ -7,6 +7,8 @@ from app.subscriptions.router import router as subscriptions_router
 from app.catalog.router import router as catalog_router
 from app.rentals.router import router as rentals_router
 from app.ai.router import router as ai_router
+import os
+
 
 # Crée toutes les tables en DB automatiquement au démarrage
 Base.metadata.create_all(bind=engine)
@@ -14,9 +16,19 @@ Base.metadata.create_all(bind=engine)
 app = FastAPI(title="Velura API", version="1.0.0")
 # CORS — permet au frontend (port 3000) d'appeler le backend (port 8000)
 
+# app.add_middleware(
+#     CORSMiddleware,
+#     allow_origins=["http://localhost:3000"],
+#     allow_credentials=True,
+#     allow_methods=["*"],
+#     allow_headers=["*"],
+# )
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=[
+        "http://localhost:3000",                          # local dev
+        os.getenv("FRONTEND_URL", "http://localhost:3000") # AWS ALB URL injected via env
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

@@ -1,0 +1,22 @@
+filebeat.inputs:
+  - type: container #the collect is from docker containers 
+    paths:
+      - /var/lib/docker/containers/*/*.log
+
+    processors:
+      - add_docker_metadata:
+          host: "unix:///var/run/docker.sock" #This adds extra info about containers to each log more info instead of simple json messages
+
+output.elasticsearch: 
+  hosts: ["${ELASTICSEARCH_HOSTS}"]
+  index: "clothes-logs-%{+yyyy.MM.dd}"
+
+setup.template.name: "clothes-logs"
+setup.template.pattern: "clothes-logs-*"
+
+setup.kibana:
+  host: "${KIBANA_HOST}" #Connect Filebeat to Kibana to set up dashboards automaticaly
+
+setup.ilm.enabled: false #ILM = Index Lifecycle Management Deletes old logs Moves data to cold storage
+
+logging.level: warning #Controls Filebeat’s own logs (not your app logs!) by levels

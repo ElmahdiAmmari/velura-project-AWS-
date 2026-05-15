@@ -1,0 +1,199 @@
+version: "3.8"
+services:
+
+  phpmyadmin:
+    image: phpmyadmin:latest
+    container_name: clothes_phpmyadmin
+    restart: always
+    ports:
+      - "8081:80"
+    environment:
+      PMA_HOST: mysql
+      PMA_PORT: 3306
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+  mysql:
+    image: mysql:8.0
+    container_name: clothes_mysql
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+    ports:
+      - "3307:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  auth-service:
+    build:
+      context: .
+      dockerfile: Dockerfile.Auth
+    container_name: clothes_auth
+    restart: always
+    ports:
+      - "5001:5001"
+    labels:
+      - "co.elastic.logs/enabled=true"
+      - "service.name=auth-service"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      MYSQL_HOST: ${MYSQL_HOST}
+      MYSQL_PORT: ${MYSQL_PORT}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+      AUTH_SERVICE_PORT: ${AUTH_SERVICE_PORT}
+      FLASK_DEBUG: ${FLASK_DEBUG}
+
+  catalog-service:
+    build:
+      context: .
+      dockerfile: Dockerfile.Catalog
+    ports:
+      - "5002:5002"
+    labels:
+      - "co.elastic.logs/enabled=true"
+      - "service.name=catalog-service"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      MYSQL_HOST: ${MYSQL_HOST}
+      MYSQL_PORT: ${MYSQL_PORT}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      CATALOG_SERVICE_PORT: ${CATALOG_SERVICE_PORT}
+      FLASK_DEBUG: ${FLASK_DEBUG}
+
+  rental-service:
+    build:
+      context: .
+      dockerfile: Dockerfile.Rental
+    ports:
+      - "5003:5003"
+    labels:
+      - "co.elastic.logs/enabled=true"
+      - "service.name=rental-service"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      auth-service:
+        condition: service_started
+    environment:
+      MYSQL_HOST: ${MYSQL_HOST}
+      MYSQL_PORT: ${MYSQL_PORT}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      AUTH_SERVICE_URL: ${AUTH_SERVICE_URL}
+      RENTAL_SERVICE_PORT: ${RENTAL_SERVICE_PORT}
+      FLASK_DEBUG: ${FLASK_DEBUG}
+
+  admin-service:
+    build:
+      context: .
+      dockerfile: Dockerfile.Admin
+    ports:
+      - "5004:5004"
+    labels:
+      - "co.elastic.logs/enabled=true"
+      - "service.name=admin-service"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      auth-service:
+        condition: service_started
+    environment:
+      MYSQL_HOST: ${MYSQL_HOST}
+      MYSQL_PORT: ${MYSQL_PORT}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      AUTH_SERVICE_URL: ${AUTH_SERVICE_URL}
+      ADMIN_SERVICE_PORT: ${ADMIN_SERVICE_PORT}
+      FLASK_DEBUG: ${FLASK_DEBUG}
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.Frontend
+      args:
+        AUTH_URL: ${FRONTEND_AUTH_URL}
+        CATALOG_URL: ${FRONTEND_CATALOG_URL}
+        RENTAL_URL: ${FRONTEND_RENTAL_URL}
+        ADMIN_URL: ${FRONTEND_ADMIN_URL}
+    ports:
+      - "8080:80"
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.12.0
+    container_name: clothes_elasticsearch
+    restart: always
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=true
+      - xpack.security.http.ssl.enabled=false
+      - xpack.security.transport.ssl.enabled=false
+      - xpack.security.authc.api_key.enabled=true
+      - ELASTIC_PASSWORD=${ELASTIC_PASSWORD}
+      - ES_JAVA_OPTS=-Xms512m -Xmx512m
+    ports:
+      - "9200:9200"
+    volumes:
+      - es_data:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s -u elastic:${ELASTIC_PASSWORD} http://localhost:9200/_cluster/health | grep -q 'yellow\\|green'"]
+      interval: 10s
+      timeout: 10s
+      retries: 20
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.12.0
+    container_name: clothes_kibana
+    restart: always
+    ports:
+      - "5601:5601"
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+      - ELASTICSEARCH_USERNAME=kibana_system
+      - ELASTICSEARCH_PASSWORD=${KIBANA_PASSWORD}
+      - XPACK_ENCRYPTEDSAVEDOBJECTS_ENCRYPTIONKEY=${KIBANA_ENCRYPTION_KEY}
+      - XPACK_SECURITY_ENCRYPTIONKEY=${KIBANA_ENCRYPTION_KEY}
+      - XPACK_REPORTING_ENCRYPTIONKEY=${KIBANA_ENCRYPTION_KEY}
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+
+  filebeat:
+    image: docker.elastic.co/beats/filebeat:8.12.0
+    container_name: clothes_filebeat
+    restart: always
+    user: root
+    volumes:
+      - ./filebeat.yml:/usr/share/filebeat/filebeat.yml:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    command: filebeat -e -strict.perms=false
+    environment:
+      ELASTICSEARCH_HOSTS: ${ELASTICSEARCH_HOSTS}
+      KIBANA_HOST: ${KIBANA_HOST}
+
+volumes:
+  mysql_data:
+  es_data:

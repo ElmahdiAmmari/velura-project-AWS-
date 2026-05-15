@@ -1,42 +1,44 @@
 version: "3.8"
 services:
 
-  phpmyadmin:
-    image: phpmyadmin:latest
-    container_name: clothes_phpmyadmin
-    restart: always
-    ports:
-      - "8081:80"
-    environment:
-      PMA_HOST: mysql
-      PMA_PORT: 3306
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
-    depends_on:
-      mysql:
-        condition: service_healthy
+  # Local/dev-only service (commented out)
+  # phpmyadmin:
+  #   image: phpmyadmin:latest
+  #   container_name: clothes_phpmyadmin
+  #   restart: always
+  #   ports:
+  #     - "8081:80"
+  #   environment:
+  #     PMA_HOST: mysql
+  #     PMA_PORT: 3306
+  #     MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+  #   depends_on:
+  #     mysql:
+  #       condition: service_healthy
 
-  mysql:
-    image: mysql:8.0
-    container_name: clothes_mysql
-    restart: always
-    environment:
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
-      MYSQL_DATABASE: ${MYSQL_DATABASE}
-    ports:
-      - "3307:3306"
-    volumes:
-      - mysql_data:/var/lib/mysql
-      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
-    healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD}"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
+  # MySQL container is commented, replaced by AWS RDS
+  # mysql:
+  #   image: mysql:8.0
+  #   container_name: clothes_mysql
+  #   restart: always
+  #   environment:
+  #     MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+  #     MYSQL_DATABASE: ${MYSQL_DATABASE}
+  #   ports:
+  #     - "3307:3306"
+  #   volumes:
+  #     - mysql_data:/var/lib/mysql
+  #     - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+  #   healthcheck:
+  #     test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD}"]
+  #     interval: 5s
+  #     timeout: 5s
+  #     retries: 10
 
   auth-service:
     build:
-      context: .
-      dockerfile: Dockerfile.Auth
+      context: ../../
+      dockerfile: services/auth/Dockerfile    
     container_name: clothes_auth
     restart: always
     ports:
@@ -44,14 +46,11 @@ services:
     labels:
       - "co.elastic.logs/enabled=true"
       - "service.name=auth-service"
-    depends_on:
-      mysql:
-        condition: service_healthy
     environment:
-      MYSQL_HOST: ${MYSQL_HOST}
+      MYSQL_HOST: ${MYSQL_HOST}       # RDS endpoint
       MYSQL_PORT: ${MYSQL_PORT}
-      MYSQL_USER: ${MYSQL_USER}
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      MYSQL_USER: ${MYSQL_USER}       # RDS username
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}   # Secrets Manager secret
       MYSQL_DATABASE: ${MYSQL_DATABASE}
       JWT_SECRET_KEY: ${JWT_SECRET_KEY}
       AUTH_SERVICE_PORT: ${AUTH_SERVICE_PORT}
@@ -59,16 +58,13 @@ services:
 
   catalog-service:
     build:
-      context: .
-      dockerfile: Dockerfile.Catalog
+      context: ../../
+      dockerfile: services/catalog/Dockerfile
     ports:
       - "5002:5002"
     labels:
       - "co.elastic.logs/enabled=true"
       - "service.name=catalog-service"
-    depends_on:
-      mysql:
-        condition: service_healthy
     environment:
       MYSQL_HOST: ${MYSQL_HOST}
       MYSQL_PORT: ${MYSQL_PORT}
@@ -80,16 +76,14 @@ services:
 
   rental-service:
     build:
-      context: .
-      dockerfile: Dockerfile.Rental
+      context: ../../
+      dockerfile: services/rental/Dockerfile
     ports:
       - "5003:5003"
     labels:
       - "co.elastic.logs/enabled=true"
       - "service.name=rental-service"
     depends_on:
-      mysql:
-        condition: service_healthy
       auth-service:
         condition: service_started
     environment:
@@ -104,16 +98,14 @@ services:
 
   admin-service:
     build:
-      context: .
-      dockerfile: Dockerfile.Admin
+      context: ../../
+      dockerfile: services/admin/Dockerfile
     ports:
       - "5004:5004"
     labels:
       - "co.elastic.logs/enabled=true"
       - "service.name=admin-service"
     depends_on:
-      mysql:
-        condition: service_healthy
       auth-service:
         condition: service_started
     environment:
@@ -128,13 +120,15 @@ services:
 
   frontend:
     build:
-      context: .
-      dockerfile: Dockerfile.Frontend
+      context: ../../frontend
+      dockerfile: Dockerfile
       args:
         AUTH_URL: ${FRONTEND_AUTH_URL}
         CATALOG_URL: ${FRONTEND_CATALOG_URL}
         RENTAL_URL: ${FRONTEND_RENTAL_URL}
         ADMIN_URL: ${FRONTEND_ADMIN_URL}
+    container_name: clothes_frontend
+    restart: always
     ports:
       - "8080:80"
 
@@ -195,5 +189,4 @@ services:
       KIBANA_HOST: ${KIBANA_HOST}
 
 volumes:
-  mysql_data:
   es_data:

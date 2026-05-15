@@ -5,7 +5,7 @@
 # prints a ready-to-use .env file to stdout.
 #
 # Usage:
-#   bash scripts/generate-secrets.sh > .env
+#   bash infra/scripts/generate-secrets.sh > .env
 # ============================================================
 
 set -euo pipefail

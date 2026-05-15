@@ -220,18 +220,18 @@
       <button class="auth-tab" onclick="switchTab('register')">Register</button>
     </div>
     <!-- LOGIN -->
-    <div id="login-form">
+    <form id="login-form">
       <div class="form-group"><label>Email</label><input type="email" id="login-email" placeholder="you@example.com"/></div>
       <div class="form-group"><label>Password</label><input type="password" id="login-password" placeholder="••••••••"/></div>
-      <button class="btn" onclick="login()">Sign In</button>
-    </div>
+      <button type="submit" class="btn">Sign In</button>
+    </form>
     <!-- REGISTER -->
-    <div id="register-form" style="display:none">
+    <form id="register-form" style="display:none">
       <div class="form-group"><label>Full Name</label><input type="text" id="reg-name" placeholder="Your name"/></div>
       <div class="form-group"><label>Email</label><input type="email" id="reg-email" placeholder="you@example.com"/></div>
       <div class="form-group"><label>Password</label><input type="password" id="reg-password" placeholder="••••••••"/></div>
-      <button class="btn" onclick="register()">Create Account</button>
-    </div>
+      <button type="submit" class="btn">Create Account</button>
+    </form>
   </div>
 </div>
 
@@ -338,6 +338,23 @@ let authToken = null;
 let currentClothId = null;
 let allClothes = [];
 
+function getAuthToken() {
+  return authToken || localStorage.getItem("velura_token") || sessionStorage.getItem("velura_token");
+}
+
+function apiUrl(serviceBase, path) {
+  const base = String(serviceBase || "").replace(/\/$/, "");
+  const route = path.startsWith("/") ? path : "/" + path;
+  return base + route;
+}
+
+function jsonAuthHeaders() {
+  const headers = { "Content-Type": "application/json" };
+  const token = getAuthToken();
+  if (token) headers["Authorization"] = "Bearer " + token;
+  return headers;
+}
+
 // ---- INIT ----
 window.onload = () => {
   const saved = localStorage.getItem("velura_token");
@@ -348,6 +365,15 @@ window.onload = () => {
     updateNavForUser();
     showPage("catalogue");
   }
+
+  document.getElementById("login-form").addEventListener("submit", (e) => {
+    e.preventDefault();
+    login();
+  });
+  document.getElementById("register-form").addEventListener("submit", (e) => {
+    e.preventDefault();
+    register();
+  });
 
   // Set today as min date for rentals
   const today = new Date().toISOString().split("T")[0];
@@ -393,9 +419,10 @@ async function login() {
   if (!email || !password) return toast("Please fill all fields", "error");
 
   try {
-    const res = await fetch(`${API.auth}/login`, {
-      method:"POST", headers:{"Content-Type":"application/json"},
-      body: JSON.stringify({email, password})
+    const res = await fetch(apiUrl(API.auth, "/login"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password })
     });
     const data = await res.json();
     if (!res.ok) return toast(data.error, "error");
@@ -417,9 +444,10 @@ async function register() {
   if (!name || !email || !password) return toast("Please fill all fields", "error");
 
   try {
-    const res = await fetch(`${API.auth}/register`, {
-      method:"POST", headers:{"Content-Type":"application/json"},
-      body: JSON.stringify({name, email, password})
+    const res = await fetch(apiUrl(API.auth, "/register"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, email, password })
     });
     const data = await res.json();
     if (!res.ok) return toast(data.error, "error");
@@ -446,7 +474,7 @@ async function loadCatalogue() {
   const grid = document.getElementById("clothes-grid");
   grid.innerHTML = `<div class="loading">Loading collection...</div>`;
   try {
-    const res = await fetch(`${API.catalog}/clothes`);
+    const res = await fetch(apiUrl(API.catalog, "/clothes"));
     allClothes = await res.json();
     renderClothes(allClothes);
     await loadCategories();
@@ -456,7 +484,7 @@ async function loadCatalogue() {
 }
 
 async function loadCategories() {
-  const res = await fetch(`${API.catalog}/categories`);
+  const res = await fetch(apiUrl(API.catalog, "/categories"));
   const cats = await res.json();
   const container = document.getElementById("category-filters");
   container.innerHTML = `<button class="filter-btn active" onclick="filterCategory('all',this)">All</button>`;
@@ -540,10 +568,10 @@ async function confirmRent() {
   if (!start || !end) return toast("Please select dates", "error");
 
   try {
-    const res = await fetch(`${API.rental}/rent`, {
-      method:"POST",
-      headers:{"Content-Type":"application/json","Authorization":`Bearer ${authToken}`},
-      body: JSON.stringify({cloth_id: currentClothId, start_date: start, end_date: end})
+    const res = await fetch(apiUrl(API.rental, "/rent"), {
+      method: "POST",
+      headers: jsonAuthHeaders(),
+      body: JSON.stringify({ cloth_id: currentClothId, start_date: start, end_date: end })
     });
     const data = await res.json();
     if (!res.ok) return toast(data.error, "error");
@@ -558,7 +586,7 @@ async function loadMyRentals() {
   const el = document.getElementById("rentals-list");
   el.innerHTML = `<div class="loading">Loading rentals...</div>`;
   try {
-    const res = await fetch(`${API.rental}/my-rentals`, {headers:{"Authorization":`Bearer ${authToken}`}});
+    const res = await fetch(apiUrl(API.rental, "/my-rentals"), { headers: jsonAuthHeaders() });
     const rentals = await res.json();
     if (!rentals.length) {
       el.innerHTML = `<div class="empty"><div class="empty-icon">📦</div><p>No rentals yet. Browse our catalogue!</p></div>`;
@@ -581,8 +609,9 @@ async function loadMyRentals() {
 
 async function returnItem(rentalId) {
   try {
-    const res = await fetch(`${API.rental}/return/${rentalId}`, {
-      method:"POST", headers:{"Authorization":`Bearer ${authToken}`}
+    const res = await fetch(apiUrl(API.rental, "/return/" + rentalId), {
+      method: "POST",
+      headers: jsonAuthHeaders()
     });
     const data = await res.json();
     if (!res.ok) return toast(data.error, "error");
@@ -596,7 +625,7 @@ async function loadAdminItems() {
   const el = document.getElementById("admin-items-list");
   el.innerHTML = `<div class="loading">Loading...</div>`;
   try {
-    const res = await fetch(`${API.admin}/admin/clothes`, {headers:{"Authorization":`Bearer ${authToken}`}});
+    const res = await fetch(apiUrl(API.admin, "/admin/clothes"), { headers: jsonAuthHeaders() });
     const items = await res.json();
     if (!items.length) { el.innerHTML = `<div class="empty">No items yet</div>`; return; }
     el.innerHTML = items.map(c => `
@@ -616,7 +645,7 @@ async function loadAdminItems() {
 }
 
 async function editItem(id) {
-  const res = await fetch(`${API.catalog}/clothes/${id}`);
+  const res = await fetch(apiUrl(API.catalog, "/clothes/" + id));
   const c = await res.json();
   document.getElementById("edit-id").value = c.id;
   document.getElementById("a-name").value = c.name;
@@ -652,10 +681,13 @@ async function saveItem() {
   if (!body.name || !body.price_per_day) return toast("Name and price are required", "error");
 
   try {
-    const url = editId ? `${API.admin}/admin/clothes/${editId}` : `${API.admin}/admin/clothes`;
+    const url = editId
+      ? apiUrl(API.admin, "/admin/clothes/" + editId)
+      : apiUrl(API.admin, "/admin/clothes");
     const method = editId ? "PUT" : "POST";
     const res = await fetch(url, {
-      method, headers:{"Content-Type":"application/json","Authorization":`Bearer ${authToken}`},
+      method,
+      headers: jsonAuthHeaders(),
       body: JSON.stringify(body)
     });
     const data = await res.json();
@@ -669,8 +701,9 @@ async function saveItem() {
 async function deleteItem(id) {
   if (!confirm("Delete this item?")) return;
   try {
-    const res = await fetch(`${API.admin}/admin/clothes/${id}`, {
-      method:"DELETE", headers:{"Authorization":`Bearer ${authToken}`}
+    const res = await fetch(apiUrl(API.admin, "/admin/clothes/" + id), {
+      method: "DELETE",
+      headers: jsonAuthHeaders()
     });
     const data = await res.json();
     if (!res.ok) return toast(data.error, "error");

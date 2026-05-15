@@ -10,7 +10,7 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 import requests
 import datetime
-from db import get_connection
+from shared.db import get_connection
 
 
 

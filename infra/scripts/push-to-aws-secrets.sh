@@ -9,13 +9,16 @@
 #   - .env file exists in the project root
 #
 # Usage:
-#   AWS_REGION=eu-west-1 bash scripts/push-to-aws-secrets.sh
+#   AWS_REGION=eu-west-1 bash infra/scripts/push-to-aws-secrets.sh
 # ============================================================
 
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+
 REGION="${AWS_REGION:-us-east-1}"
-ENV_FILE="${1:-.env}"
+ENV_FILE="${1:-$PROJECT_ROOT/.env}"
 PREFIX="/velura"
 
 # List of keys that are actual secrets (not plain config)

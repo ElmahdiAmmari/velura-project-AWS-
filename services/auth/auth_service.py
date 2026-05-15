@@ -11,7 +11,7 @@ from flask_cors import CORS
 import bcrypt
 import jwt
 import datetime
-from db import get_connection
+from shared.db import get_connection
 
 #request lets u read what the user sent(JSON)
 #jsonify converts a Python dict into a JSON response to send back

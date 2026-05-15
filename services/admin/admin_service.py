@@ -9,7 +9,7 @@ import os
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import requests # It lets Python call another service
-from db import get_connection
+from shared.db import get_connection
 
 
 app = Flask(__name__)

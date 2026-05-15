@@ -2,16 +2,15 @@ name: CI/CD Velura Production Pipeline
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "main", "develop", "mista" ]
   pull_request:
-    branches: [ "main" ]
+    branches: [ "main", "develop" ]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  # ÉTAPE 1 : Détecter quels fichiers ont changé pour optimiser les builds (Path Filtering)
   detect-changes:
     name: Check Changed Services
     runs-on: ubuntu-latest
@@ -50,7 +49,6 @@ jobs:
               - 'frontend/**'
               - '.github/workflows/ci.yml'
 
-  # ÉTAPE 2 : Qualité du code Python (Linting)
   linting:
     name: Python Code Quality
     runs-on: ubuntu-latest
@@ -65,14 +63,13 @@ jobs:
           cache: 'pip'
 
       - name: Install Linters
-        run: pip install flake8 black
+        run: pip install flake8
 
       - name: Run Syntax Check (Flake8)
         run: flake8 services/ shared/ --count --select=E9,F63,F7,F82 --show-source --statistics
 
-  # ÉTAPE 3 : Build, Sécurité et Push Matrix
   build-and-deploy:
-    name: Build & Scan
+    name: Build & Scan - ${{ matrix.service }}
     needs: [detect-changes, linting]
     runs-on: ubuntu-latest
     strategy:
@@ -114,13 +111,12 @@ jobs:
         if: matrix.run_build == 'true'
         uses: docker/setup-buildx-action@v3
 
-      # Injection des vraies URLs de production pour le Frontend (Build-time Args)
       - name: Build Docker Image
         if: matrix.run_build == 'true'
         uses: docker/build-push-action@v5
         with:
           context: ${{ matrix.context }}
-          file: matrix.file
+          file: ${{ matrix.file }}
           load: true
           tags: ${{ matrix.image_name }}:${{ github.sha }}
           build-args: |
@@ -131,19 +127,17 @@ jobs:
           cache-from: type=gha,scope=${{ matrix.service }}
           cache-to: type=gha,mode=max,scope=${{ matrix.service }}
 
-      # Sécurité : Analyse de l'image avant de l'envoyer sur AWS
       - name: CyberSecurity Scan (Trivy)
         if: matrix.run_build == 'true'
         uses: aquasecurity/trivy-action@master
         with:
           image-ref: '${{ matrix.image_name }}:${{ github.sha }}'
           format: 'table'
-          exit-code: '1' # Fait planter le pipeline si une faille CRITIQUE est trouvée
+          exit-code: '1'
           ignore-unfixed: true
           vuln-type: 'os,library'
           severity: 'CRITICAL,HIGH'
 
-      # Authentification AWS (Uniquement sur la branche main lors d'un push)
       - name: Configure AWS Credentials
         if: matrix.run_build == 'true' && github.ref == 'refs/heads/main' && github.event_name == 'push'
         uses: aws-actions/configure-aws-credentials@v4

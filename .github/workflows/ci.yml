@@ -1,0 +1,168 @@
+name: CI/CD Velura Production Pipeline
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ÉTAPE 1 : Détecter quels fichiers ont changé pour optimiser les builds (Path Filtering)
+  detect-changes:
+    name: Check Changed Services
+    runs-on: ubuntu-latest
+    outputs:
+      auth: ${{ steps.filter.outputs.auth }}
+      catalog: ${{ steps.filter.outputs.catalog }}
+      rental: ${{ steps.filter.outputs.rental }}
+      admin: ${{ steps.filter.outputs.admin }}
+      frontend: ${{ steps.filter.outputs.frontend }}
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Paths Filter
+        id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            auth:
+              - 'services/auth/**'
+              - 'shared/**'
+              - '.github/workflows/ci.yml'
+            catalog:
+              - 'services/catalog/**'
+              - 'shared/**'
+              - '.github/workflows/ci.yml'
+            rental:
+              - 'services/rental/**'
+              - 'shared/**'
+              - '.github/workflows/ci.yml'
+            admin:
+              - 'services/admin/**'
+              - 'shared/**'
+              - '.github/workflows/ci.yml'
+            frontend:
+              - 'frontend/**'
+              - '.github/workflows/ci.yml'
+
+  # ÉTAPE 2 : Qualité du code Python (Linting)
+  linting:
+    name: Python Code Quality
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install Linters
+        run: pip install flake8 black
+
+      - name: Run Syntax Check (Flake8)
+        run: flake8 services/ shared/ --count --select=E9,F63,F7,F82 --show-source --statistics
+
+  # ÉTAPE 3 : Build, Sécurité et Push Matrix
+  build-and-deploy:
+    name: Build & Scan
+    needs: [detect-changes, linting]
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - service: auth
+            context: .
+            file: services/auth/Dockerfile
+            image_name: velura-auth
+            run_build: ${{ needs.detect-changes.outputs.auth }}
+          - service: catalog
+            context: .
+            file: services/catalog/Dockerfile
+            image_name: velura-catalog
+            run_build: ${{ needs.detect-changes.outputs.catalog }}
+          - service: rental
+            context: .
+            file: services/rental/Dockerfile
+            image_name: velura-rental
+            run_build: ${{ needs.detect-changes.outputs.rental }}
+          - service: admin
+            context: .
+            file: services/admin/Dockerfile
+            image_name: velura-admin
+            run_build: ${{ needs.detect-changes.outputs.admin }}
+          - service: frontend
+            context: .
+            file: frontend/Dockerfile
+            image_name: velura-frontend
+            run_build: ${{ needs.detect-changes.outputs.frontend }}
+
+    steps:
+      - name: Checkout Code
+        if: matrix.run_build == 'true'
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        if: matrix.run_build == 'true'
+        uses: docker/setup-buildx-action@v3
+
+      # Injection des vraies URLs de production pour le Frontend (Build-time Args)
+      - name: Build Docker Image
+        if: matrix.run_build == 'true'
+        uses: docker/build-push-action@v5
+        with:
+          context: ${{ matrix.context }}
+          file: matrix.file
+          load: true
+          tags: ${{ matrix.image_name }}:${{ github.sha }}
+          build-args: |
+            AUTH_URL=${{ vars.PROD_AUTH_URL || 'http://localhost:5001' }}
+            CATALOG_URL=${{ vars.PROD_CATALOG_URL || 'http://localhost:5002' }}
+            RENTAL_URL=${{ vars.PROD_RENTAL_URL || 'http://localhost:5003' }}
+            ADMIN_URL=${{ vars.PROD_ADMIN_URL || 'http://localhost:5004' }}
+          cache-from: type=gha,scope=${{ matrix.service }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.service }}
+
+      # Sécurité : Analyse de l'image avant de l'envoyer sur AWS
+      - name: CyberSecurity Scan (Trivy)
+        if: matrix.run_build == 'true'
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: '${{ matrix.image_name }}:${{ github.sha }}'
+          format: 'table'
+          exit-code: '1' # Fait planter le pipeline si une faille CRITIQUE est trouvée
+          ignore-unfixed: true
+          vuln-type: 'os,library'
+          severity: 'CRITICAL,HIGH'
+
+      # Authentification AWS (Uniquement sur la branche main lors d'un push)
+      - name: Configure AWS Credentials
+        if: matrix.run_build == 'true' && github.ref == 'refs/heads/main' && github.event_name == 'push'
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ vars.AWS_REGION || 'eu-west-3' }}
+
+      - name: Login to Amazon ECR
+        if: matrix.run_build == 'true' && github.ref == 'refs/heads/main' && github.event_name == 'push'
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Push Image to AWS ECR
+        if: matrix.run_build == 'true' && github.ref == 'refs/heads/main' && github.event_name == 'push'
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker tag ${{ matrix.image_name }}:$IMAGE_TAG $ECR_REGISTRY/${{ matrix.image_name }}:$IMAGE_TAG
+          docker tag ${{ matrix.image_name }}:$IMAGE_TAG $ECR_REGISTRY/${{ matrix.image_name }}:latest
+          docker push -a $ECR_REGISTRY/${{ matrix.image_name }}

@@ -91,11 +91,24 @@ jobs:
           pip install -r services/auth/requirements.txt pytest
 
       - name: Run Security Tests via Pytest
+        env:
+          # Configuration Réseau & Flask
+          AUTH_SERVICE_PORT: "5001"
+          JWT_SECRET_KEY: "ci_safety_key_override"
+          FLASK_DEBUG: "false"
+          FLASK_ENV: "testing"
+
+          # Prévention proactive : Variables de base de données (au cas où ton collègue les aurait aussi rendues strictes)
+          DB_HOST: "127.0.0.1"
+          DB_USER: "test_user"
+          DB_PASSWORD: "test_password"
+          DB_NAME: "clothes_auth"
+          MYSQL_HOST: "127.0.0.1"
+          MYSQL_USER: "test_user"
+          MYSQL_PASSWORD: "test_password"
+          MYSQL_DATABASE: "clothes_auth"
         run: |
-          AUTH_SERVICE_PORT="5001" \
-          JWT_SECRET_KEY="ci_safety_key_override" \
-          PYTHONPATH=.:services/auth \
-          pytest services/auth/tests/ -v
+          PYTHONPATH=.:services/auth pytest services/auth/tests/ -v
 
   build-and-deploy:
     name: Build & Scan - ${{ matrix.service }}

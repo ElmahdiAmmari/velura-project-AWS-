@@ -25,13 +25,13 @@ logger = logging.getLogger("auth_service")
 app = Flask(__name__)
 CORS(app)  # Allow frontend to call this service
 
-# Secret key for JWT tokens (set JWT_SECRET_KEY in the environment for production)
-SECRET_KEY = os.environ.get("JWT_SECRET_KEY", "my_super_secret_key_change_this")
-AUTH_SERVICE_PORT = int(os.environ.get("AUTH_SERVICE_PORT", "5001"))
-FLASK_DEBUG = os.environ.get("FLASK_DEBUG", "true").lower() in ("1", "true", "yes")
+# Secret key for JWT tokens (set JWT_SECRET_KEY in the environment)
+SECRET_KEY = os.environ["JWT_SECRET_KEY"]
+AUTH_SERVICE_PORT = int(os.environ["AUTH_SERVICE_PORT"])
+FLASK_DEBUG = os.environ["FLASK_DEBUG"].lower() in ("1", "true", "yes")
 
 
-@app.route("/register", methods=["POST"])
+@app.route("/auth/register", methods=["POST"])
 def register():
     """Register a new user"""
     data = request.json
@@ -66,7 +66,7 @@ def register():
         return jsonify({"error": str(e)}), 500
 
 
-@app.route("/login", methods=["POST"])
+@app.route("/auth/login", methods=["POST"])
 def login():
     """Login and get a JWT token."""
     data = request.json
@@ -114,7 +114,7 @@ def login():
         return jsonify({"error": str(e)}), 500
 
 
-@app.route("/verify", methods=["GET"])
+@app.route("/auth/verify", methods=["GET"])
 def verify_token():
     """Verify if a JWT token is valid (used by other services)."""
     token = request.headers.get("Authorization", "").replace("Bearer ", "")
@@ -131,6 +131,30 @@ def verify_token():
     except jwt.InvalidTokenError:
         return jsonify({"error": "Invalid token"}), 401
 
+@app.route("/auth/health")   # or /catalog/health etc.
+def health():
+    return jsonify({"status": "ok"}), 200
+
+def init_db():
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS users (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            name VARCHAR(100),
+            email VARCHAR(100) UNIQUE,
+            password VARCHAR(255),
+            role VARCHAR(20) DEFAULT 'customer',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+init_db()
 
 if __name__ == "__main__":
     print(f"Auth Service running on http://localhost:{AUTH_SERVICE_PORT}")

@@ -192,9 +192,9 @@
 </head>
 <body>
 
-<!-- API base URLs: edit this block per environment (local defaults match published compose ports). -->
+<!-- API base URLs: injected at build time from FRONTEND_* env vars. -->
 <script type="application/json" id="velura-api-endpoints">
-{"auth":"http://localhost:5001","catalog":"http://localhost:5002","rental":"http://localhost:5003","admin":"http://localhost:5004"}
+{"auth":"%FRONTEND_AUTH_URL%","catalog":"%FRONTEND_CATALOG_URL%","rental":"%FRONTEND_RENTAL_URL%","admin":"%FRONTEND_ADMIN_URL%"}
 </script>
 
 <!-- NAVBAR -->
@@ -314,23 +314,25 @@
 
 <script>
 // ============================================================
-// CONFIGURATION — defaults from #velura-api-endpoints JSON (see .env.example)
+// CONFIGURATION — API endpoints injected at build/runtime
 // ============================================================
 function loadApiEndpoints() {
-  const defaults = {
-    auth: "http://localhost:5001",
-    catalog: "http://localhost:5002",
-    rental: "http://localhost:5003",
-    admin: "http://localhost:5004"
-  };
-  const el = document.getElementById("velura-api-endpoints");
-  if (!el || !el.textContent.trim()) return defaults;
-  try {
-    return { ...defaults, ...JSON.parse(el.textContent) };
-  } catch (e) {
-    return defaults;
+  const endpointsScript = document.getElementById("velura-api-endpoints");
+  if (endpointsScript) {
+    try {
+      return JSON.parse(endpointsScript.textContent || "{}");
+    } catch (error) {
+      console.error("Failed to parse API endpoint config:", error);
+    }
   }
+  return {
+    auth: "%FRONTEND_AUTH_URL%",
+    catalog: "%FRONTEND_CATALOG_URL%",
+    rental: "%FRONTEND_RENTAL_URL%",
+    admin: "%FRONTEND_ADMIN_URL%"
+  };
 }
+
 const API = loadApiEndpoints();
 
 let currentUser = null;
@@ -625,7 +627,7 @@ async function loadAdminItems() {
   const el = document.getElementById("admin-items-list");
   el.innerHTML = `<div class="loading">Loading...</div>`;
   try {
-    const res = await fetch(apiUrl(API.admin, "/admin/clothes"), { headers: jsonAuthHeaders() });
+    const res = await fetch(apiUrl(API.admin, "/clothes"), { headers: jsonAuthHeaders() });
     const items = await res.json();
     if (!items.length) { el.innerHTML = `<div class="empty">No items yet</div>`; return; }
     el.innerHTML = items.map(c => `
@@ -682,8 +684,8 @@ async function saveItem() {
 
   try {
     const url = editId
-      ? apiUrl(API.admin, "/admin/clothes/" + editId)
-      : apiUrl(API.admin, "/admin/clothes");
+      ? apiUrl(API.admin, "/clothes/" + editId)
+      : apiUrl(API.admin, "/clothes");
     const method = editId ? "PUT" : "POST";
     const res = await fetch(url, {
       method,
@@ -701,7 +703,7 @@ async function saveItem() {
 async function deleteItem(id) {
   if (!confirm("Delete this item?")) return;
   try {
-    const res = await fetch(apiUrl(API.admin, "/admin/clothes/" + id), {
+    const res = await fetch(apiUrl(API.admin, "/clothes/" + id), {
       method: "DELETE",
       headers: jsonAuthHeaders()
     });

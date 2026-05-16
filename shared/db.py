@@ -7,11 +7,11 @@ import mysql.connector
 
 def _db_config():
     return {
-        "host": os.environ.get("MYSQL_HOST", "mysql"),
-        "user": os.environ.get("MYSQL_USER", "rental_user"),
-        "password": os.environ.get("MYSQL_PASSWORD", "rental123"),
-        "database": os.environ.get("MYSQL_DATABASE", "clothes_rental"),
-        "port": int(os.environ.get("MYSQL_PORT", "3306")),
+        "host": os.environ["MYSQL_HOST"],
+        "user": os.environ["MYSQL_USER"],
+        "password": os.environ["MYSQL_PASSWORD"],
+        "database": os.environ["MYSQL_DATABASE"],
+        "port": int(os.environ["MYSQL_PORT"]),
     }
 
 

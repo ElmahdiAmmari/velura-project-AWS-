@@ -15,9 +15,9 @@ from shared.db import get_connection
 app = Flask(__name__)
 CORS(app)
 
-AUTH_SERVICE = os.environ.get("AUTH_SERVICE_URL", "http://auth-service:5001").rstrip("/")
-ADMIN_SERVICE_PORT = int(os.environ.get("ADMIN_SERVICE_PORT", "5004"))
-FLASK_DEBUG = os.environ.get("FLASK_DEBUG", "true").lower() in ("1", "true", "yes")
+AUTH_SERVICE = os.environ["AUTH_SERVICE_URL"].rstrip("/")
+ADMIN_SERVICE_PORT = int(os.environ["ADMIN_SERVICE_PORT"])
+FLASK_DEBUG = os.environ["FLASK_DEBUG"].lower() in ("1", "true", "yes")
 import logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
 logger = logging.getLogger("admin_service")
@@ -195,6 +195,9 @@ def admin_get_clothes():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@app.route("/admin/health")   # or /catalog/health etc.
+def health():
+    return jsonify({"status": "ok"}), 200
 
 if __name__ == "__main__":
     print(f"🔧 Admin Service running on http://localhost:{ADMIN_SERVICE_PORT}")

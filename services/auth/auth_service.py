@@ -159,3 +159,5 @@ init_db()
 if __name__ == "__main__":
     print(f"Auth Service running on http://localhost:{AUTH_SERVICE_PORT}")
     app.run(port=AUTH_SERVICE_PORT, host="0.0.0.0", debug=FLASK_DEBUG)
+
+    

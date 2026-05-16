@@ -181,6 +181,9 @@ def return_item(rental_id):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@app.route("/rental/health")   # or /catalog/health etc.
+def health():
+    return jsonify({"status": "ok"}), 200
 
 if __name__ == "__main__":
     print(f"📦 Rental Service running on http://localhost:{RENTAL_SERVICE_PORT}")

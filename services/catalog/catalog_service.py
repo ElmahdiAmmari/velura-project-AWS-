@@ -169,6 +169,9 @@ def add_item(current_user):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@app.route("/catalog/health")   # or /catalog/health etc.
+def health():
+    return jsonify({"status": "ok"}), 200
 
 if __name__ == "__main__":
     print(f"👗 Catalog Service running on http://localhost:{CATALOG_SERVICE_PORT}")

@@ -131,6 +131,9 @@ def verify_token():
     except jwt.InvalidTokenError:
         return jsonify({"error": "Invalid token"}), 401
 
+@app.route("/auth/health")   # or /catalog/health etc.
+def health():
+    return jsonify({"status": "ok"}), 200
 
 if __name__ == "__main__":
     print(f"Auth Service running on http://localhost:{AUTH_SERVICE_PORT}")

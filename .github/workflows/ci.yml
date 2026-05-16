@@ -148,6 +148,7 @@ jobs:
             file: infra/docker/filebeat-image/Dockerfile
             image_name: clothes-filebeat
             run_build: ${{ needs.detect-changes.outputs.filebeat }}
+            trivy_exit_code: '0' # <-- NON Bloquant (code tiers Elastic)
 
     steps:
       - name: Checkout Code
@@ -180,7 +181,7 @@ jobs:
         with:
           image-ref: '${{ matrix.image_name }}:${{ github.sha }}'
           format: 'table'
-          exit-code: '1'
+          exit-code: ${{ matrix.trivy_exit_code }}
           ignore-unfixed: true
           vuln-type: 'os,library'
           severity: 'CRITICAL,HIGH'

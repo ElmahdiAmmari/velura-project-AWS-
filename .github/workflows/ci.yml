@@ -167,11 +167,12 @@ jobs:
           file: ${{ matrix.file }}
           load: true
           tags: ${{ matrix.image_name }}:${{ github.sha }}
+          # Injection des variables de production de ton amie
           build-args: |
-            AUTH_URL=${{ vars.PROD_AUTH_URL || 'http://localhost:5001' }}
-            CATALOG_URL=${{ vars.PROD_CATALOG_URL || 'http://localhost:5002' }}
-            RENTAL_URL=${{ vars.PROD_RENTAL_URL || 'http://localhost:5003' }}
-            ADMIN_URL=${{ vars.PROD_ADMIN_URL || 'http://localhost:5004' }}
+            AUTH_URL=http://clothes-alb-201777499.us-east-1.elb.amazonaws.com/auth
+            CATALOG_URL=http://clothes-alb-201777499.us-east-1.elb.amazonaws.com/catalog
+            RENTAL_URL=http://clothes-alb-201777499.us-east-1.elb.amazonaws.com/rental
+            ADMIN_URL=http://clothes-alb-201777499.us-east-1.elb.amazonaws.com/admin
           cache-from: type=gha,scope=${{ matrix.service }}
           cache-to: type=gha,mode=max,scope=${{ matrix.service }}
 

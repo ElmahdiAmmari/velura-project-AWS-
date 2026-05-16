@@ -120,7 +120,7 @@ jobs:
             image_name: velura-admin
             run_build: ${{ needs.detect-changes.outputs.admin }}
           - service: frontend
-            context: .
+            context: frontend     # <-- ON CHANGE LE CONTEXTE ICI
             file: frontend/Dockerfile
             image_name: velura-frontend
             run_build: ${{ needs.detect-changes.outputs.frontend }}

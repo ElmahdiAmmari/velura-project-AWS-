@@ -16,10 +16,10 @@ from shared.db import get_connection
 app = Flask(__name__)
 CORS(app)
 
-AUTH_SERVICE_URL = os.environ.get("AUTH_SERVICE_URL", "http://auth-service:5001")
+AUTH_SERVICE_URL = os.environ["AUTH_SERVICE_URL"]
 
-CATALOG_SERVICE_PORT = int(os.environ.get("CATALOG_SERVICE_PORT", "5002"))
-FLASK_DEBUG = os.environ.get("FLASK_DEBUG", "true").lower() in ("1", "true", "yes")
+CATALOG_SERVICE_PORT = int(os.environ["CATALOG_SERVICE_PORT"])
+FLASK_DEBUG = os.environ["FLASK_DEBUG"].lower() in ("1", "true", "yes")
 
 import logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
@@ -60,7 +60,7 @@ def require_auth(f):
     return decorated_function
 
 
-@app.route("/clothes", methods=["GET"])
+@app.route("/catalog/clothes", methods=["GET"])
 def get_all_clothes():
     """Get all clothes. Optional filter by category or size."""
     category = request.args.get("category")
@@ -96,7 +96,7 @@ def get_all_clothes():
         return jsonify({"error": str(e)}), 500
 
 
-@app.route("/clothes/<int:cloth_id>", methods=["GET"])
+@app.route("/catalog/clothes/<int:cloth_id>", methods=["GET"])
 def get_cloth(cloth_id):
     """Get a single cloth by ID."""
     try:
@@ -115,7 +115,7 @@ def get_cloth(cloth_id):
         return jsonify({"error": str(e)}), 500
 
 
-@app.route("/categories", methods=["GET"])
+@app.route("/catalog/categories", methods=["GET"])
 def get_categories():
     """Get all unique categories."""
     try:
@@ -130,7 +130,7 @@ def get_categories():
         return jsonify({"error": str(e)}), 500
 
 
-@app.route("/items", methods=["POST"])
+@app.route("/catalog/items", methods=["POST"])
 @require_auth
 def add_item(current_user):
     """Création d'un article (route protégée — vérification JWT via auth-service)."""

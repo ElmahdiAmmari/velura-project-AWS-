@@ -18,9 +18,9 @@ app = Flask(__name__)
 CORS(app)
 
 # Auth service URL (to verify tokens); use service DNS in Docker, full URL on AWS
-AUTH_SERVICE = os.environ.get("AUTH_SERVICE_URL", "http://auth-service:5001").rstrip("/")
-RENTAL_SERVICE_PORT = int(os.environ.get("RENTAL_SERVICE_PORT", "5003"))
-FLASK_DEBUG = os.environ.get("FLASK_DEBUG", "true").lower() in ("1", "true", "yes")
+AUTH_SERVICE = os.environ["AUTH_SERVICE_URL"].rstrip("/")
+RENTAL_SERVICE_PORT = int(os.environ["RENTAL_SERVICE_PORT"])
+FLASK_DEBUG = os.environ["FLASK_DEBUG"].lower() in ("1", "true", "yes")
 
 import logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
@@ -46,7 +46,7 @@ def get_token_from_request():
     return auth_header.replace("Bearer ", "")
 
 
-@app.route("/rent", methods=["POST"])
+@app.route("/rental/rent", methods=["POST"])
 def rent_cloth():
     """Rent a clothing item."""
     # 1. Check if user is logged in
@@ -115,7 +115,7 @@ def rent_cloth():
         return jsonify({"error": str(e)}), 500
 
 
-@app.route("/my-rentals", methods=["GET"])
+@app.route("/rental/my-rentals", methods=["GET"])
 def my_rentals():
     """Get all rentals for the logged-in user."""
     token = get_token_from_request()
@@ -149,7 +149,7 @@ def my_rentals():
         return jsonify({"error": str(e)}), 500
 
 
-@app.route("/return/<int:rental_id>", methods=["POST"])
+@app.route("/rental/return/<int:rental_id>", methods=["POST"])
 def return_item(rental_id):
     """Return a rented item."""
     token = get_token_from_request()

@@ -15,9 +15,9 @@ from shared.db import get_connection
 app = Flask(__name__)
 CORS(app)
 
-AUTH_SERVICE = os.environ.get("AUTH_SERVICE_URL", "http://auth-service:5001").rstrip("/")
-ADMIN_SERVICE_PORT = int(os.environ.get("ADMIN_SERVICE_PORT", "5004"))
-FLASK_DEBUG = os.environ.get("FLASK_DEBUG", "true").lower() in ("1", "true", "yes")
+AUTH_SERVICE = os.environ["AUTH_SERVICE_URL"].rstrip("/")
+ADMIN_SERVICE_PORT = int(os.environ["ADMIN_SERVICE_PORT"])
+FLASK_DEBUG = os.environ["FLASK_DEBUG"].lower() in ("1", "true", "yes")
 import logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
 logger = logging.getLogger("admin_service")

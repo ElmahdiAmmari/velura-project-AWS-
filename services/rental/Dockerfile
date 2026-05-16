@@ -12,6 +12,9 @@ WORKDIR /app
 ENV PYTHONPATH=/app
 
 COPY --from=builder /install /usr/local
+# CORRECTION CRITIQUE : Éliminer les CVEs de l'image de base finale
+RUN pip install --no-cache-dir --upgrade pip setuptools wheel
+
 COPY shared/ /app/shared/
 COPY services/rental/ /app/
 

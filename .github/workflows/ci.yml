@@ -20,6 +20,7 @@ jobs:
       rental: ${{ steps.filter.outputs.rental }}
       admin: ${{ steps.filter.outputs.admin }}
       frontend: ${{ steps.filter.outputs.frontend }}
+      filebeat: ${{ steps.filter.outputs.filebeat }} # CORRECTION : Déclaration de l'output pour la matrice
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -50,6 +51,7 @@ jobs:
               - '.github/workflows/ci.yml'
             filebeat:
               - 'infra/docker/filebeat-image/**'
+              - '.github/workflows/ci.yml'
 
   linting:
     name: Python Code Quality
@@ -88,10 +90,10 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r services/auth/requirements.txt pytest
 
-      # CORRECTION : On reste à la racine et on déclare les deux scopes d'importation
       - name: Run Security Tests via Pytest
         run: |
-          PYTHONPATH=.:services/auth pytest services/auth/tests/ -v
+          # CORRECTION : Injection de la variable d'environnement pour neutraliser le KeyError de l'application
+          JWT_SECRET_KEY="ci_safety_key_override" PYTHONPATH=.:services/auth pytest services/auth/tests/ -v
 
   build-and-deploy:
     name: Build & Scan - ${{ matrix.service }}
@@ -122,7 +124,7 @@ jobs:
             image_name: clothes-admin-service
             run_build: ${{ needs.detect-changes.outputs.admin }}
           - service: frontend
-            context: frontend     # <-- ON CHANGE LE CONTEXTE ICI
+            context: frontend
             file: frontend/Dockerfile
             image_name: clothes-frontend
             run_build: ${{ needs.detect-changes.outputs.frontend }}
@@ -130,8 +132,7 @@ jobs:
             context: infra/docker/filebeat-image
             file: infra/docker/filebeat-image/Dockerfile
             image_name: clothes-filebeat
-            run_build: ${{ needs.detect-changes.outputs.filebeat }} 
-            # Note : Si tu n'utilises pas le job detect-changes, mets simplement 'true'
+            run_build: ${{ needs.detect-changes.outputs.filebeat }}
 
     steps:
       - name: Checkout Code

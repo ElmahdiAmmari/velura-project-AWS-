@@ -2,8 +2,7 @@ import os
 import sys
 from unittest.mock import MagicMock
 
-# 1. FIRST PRINCIPLES : Séquençage de l'environnement avant l'importation globale
-# On injecte de force toutes les variables requises pour l'initialisation du module
+# 1. Isolation de l'environnement
 os.environ["JWT_SECRET_KEY"] = "ci_safety_key_override"
 os.environ["AUTH_SERVICE_PORT"] = "5001"
 os.environ["FLASK_DEBUG"] = "false"
@@ -13,7 +12,7 @@ os.environ["MYSQL_USER"] = "test"
 os.environ["MYSQL_PASSWORD"] = "test"
 os.environ["MYSQL_DATABASE"] = "test"
 
-# 2. NEUTRALISATION RÉSEAU : On intercepte mysql.connector pour empêcher la vraie connexion
+# 2. Interception du connecteur MySQL
 import mysql.connector
 mysql.connector.connect = MagicMock(return_value=MagicMock())
 
@@ -22,8 +21,6 @@ import jwt
 
 @pytest.fixture
 def client():
-    # Cet import déclenche l'exécution d'auth_service.py, mais les variables existent
-    # et mysql.connector.connect renvoie désormais un faux objet sans tenter de connexion.
     from auth_service import app
     app.config['TESTING'] = True
     with app.test_client() as client:
@@ -31,7 +28,8 @@ def client():
 
 def test_verify_token_missing_vulnerability(client):
     """Sécurité : Une requête sans en-tête Authorization doit être rejetée avec une 401"""
-    response = client.get('/verify')
+    # CORRECTION : Utilisation du nouveau chemin de route AWS (ex: /auth/verify)
+    response = client.get('/auth/verify') 
     assert response.status_code == 401
     assert b"No token provided" in response.data
 
@@ -39,7 +37,8 @@ def test_verify_token_corrupted_signature(client):
     """Sécurité : Un token modifié manuellement doit être rejeté (Anti-tampering)"""
     bad_token = jwt.encode({'user': 'attacker'}, 'WRONG_SECRET_KEY', algorithm='HS256')
     
-    response = client.get('/verify', headers={
+    # CORRECTION : Utilisation du nouveau chemin de route AWS (ex: /auth/verify)
+    response = client.get('/auth/verify', headers={
         'Authorization': f'Bearer {bad_token}'
     })
     assert response.status_code == 401

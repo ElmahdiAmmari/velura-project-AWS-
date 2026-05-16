@@ -1,8 +1,29 @@
+import os
+import sys
+from unittest.mock import MagicMock
+
+# 1. FIRST PRINCIPLES : Séquençage de l'environnement avant l'importation globale
+# On injecte de force toutes les variables requises pour l'initialisation du module
+os.environ["JWT_SECRET_KEY"] = "ci_safety_key_override"
+os.environ["AUTH_SERVICE_PORT"] = "5001"
+os.environ["FLASK_DEBUG"] = "false"
+os.environ["MYSQL_PORT"] = "3306"
+os.environ["MYSQL_HOST"] = "127.0.0.1"
+os.environ["MYSQL_USER"] = "test"
+os.environ["MYSQL_PASSWORD"] = "test"
+os.environ["MYSQL_DATABASE"] = "test"
+
+# 2. NEUTRALISATION RÉSEAU : On intercepte mysql.connector pour empêcher la vraie connexion
+import mysql.connector
+mysql.connector.connect = MagicMock(return_value=MagicMock())
+
 import pytest
 import jwt
 
 @pytest.fixture
 def client():
+    # Cet import déclenche l'exécution d'auth_service.py, mais les variables existent
+    # et mysql.connector.connect renvoie désormais un faux objet sans tenter de connexion.
     from auth_service import app
     app.config['TESTING'] = True
     with app.test_client() as client:

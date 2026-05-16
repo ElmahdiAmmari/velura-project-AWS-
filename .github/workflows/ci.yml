@@ -11,6 +11,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # JOB 1 : Détection intelligente des fichiers modifiés
   detect-changes:
     name: Check Changed Services
     runs-on: ubuntu-latest
@@ -20,7 +21,7 @@ jobs:
       rental: ${{ steps.filter.outputs.rental }}
       admin: ${{ steps.filter.outputs.admin }}
       frontend: ${{ steps.filter.outputs.frontend }}
-      filebeat: ${{ steps.filter.outputs.filebeat }} # CORRECTION : Déclaration de l'output pour la matrice
+      filebeat: ${{ steps.filter.outputs.filebeat }}
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -53,6 +54,7 @@ jobs:
               - 'infra/docker/filebeat-image/**'
               - '.github/workflows/ci.yml'
 
+  # JOB 2 : Qualité de code Python
   linting:
     name: Python Code Quality
     runs-on: ubuntu-latest
@@ -72,6 +74,7 @@ jobs:
       - name: Run Syntax Check (Flake8)
         run: flake8 services/ shared/ --count --select=E9,F63,F7,F82 --show-source --statistics
 
+  # JOB 3 : Tests unitaires et de sécurité isolés (Mock Database)
   backend-tests:
     name: Security & Functional Tests
     runs-on: ubuntu-latest
@@ -92,13 +95,10 @@ jobs:
 
       - name: Run Security Tests via Pytest
         env:
-          # Configuration Réseau & Flask
           AUTH_SERVICE_PORT: "5001"
           JWT_SECRET_KEY: "ci_safety_key_override"
           FLASK_DEBUG: "false"
           FLASK_ENV: "testing"
-
-          # Prévention proactive : Variables de base de données (au cas où ton collègue les aurait aussi rendues strictes)
           DB_HOST: "127.0.0.1"
           DB_USER: "test_user"
           DB_PASSWORD: "test_password"
@@ -107,9 +107,11 @@ jobs:
           MYSQL_USER: "test_user"
           MYSQL_PASSWORD: "test_password"
           MYSQL_DATABASE: "clothes_auth"
+          MYSQL_PORT: "3306"
         run: |
           PYTHONPATH=.:services/auth pytest services/auth/tests/ -v
 
+  # JOB 4 : Construction parallèle, Analyse Trivy et Livraison ECR (us-east-1)
   build-and-deploy:
     name: Build & Scan - ${{ matrix.service }}
     needs: [detect-changes, linting, backend-tests]
@@ -123,32 +125,37 @@ jobs:
             file: services/auth/Dockerfile
             image_name: clothes-auth-service
             run_build: ${{ needs.detect-changes.outputs.auth }}
+            trivy_exit_code: '1' # Strict
           - service: catalog
             context: .
             file: services/catalog/Dockerfile
             image_name: clothes-catalog-service
             run_build: ${{ needs.detect-changes.outputs.catalog }}
+            trivy_exit_code: '1' # Strict
           - service: rental
             context: .
             file: services/rental/Dockerfile
             image_name: clothes-rental-service
             run_build: ${{ needs.detect-changes.outputs.rental }}
+            trivy_exit_code: '1' # Strict
           - service: admin
             context: .
             file: services/admin/Dockerfile
             image_name: clothes-admin-service
             run_build: ${{ needs.detect-changes.outputs.admin }}
+            trivy_exit_code: '1' # Strict
           - service: frontend
             context: frontend
             file: frontend/Dockerfile
             image_name: clothes-frontend
             run_build: ${{ needs.detect-changes.outputs.frontend }}
+            trivy_exit_code: '1' # Strict
           - service: filebeat
             context: infra/docker/filebeat-image
             file: infra/docker/filebeat-image/Dockerfile
             image_name: clothes-filebeat
             run_build: ${{ needs.detect-changes.outputs.filebeat }}
-            trivy_exit_code: '0' # <-- NON Bloquant (code tiers Elastic)
+            trivy_exit_code: '0' # Non-bloquant pour l'outil tiers Elastic
 
     steps:
       - name: Checkout Code
@@ -167,7 +174,6 @@ jobs:
           file: ${{ matrix.file }}
           load: true
           tags: ${{ matrix.image_name }}:${{ github.sha }}
-          # Injection des variables de production de ton amie
           build-args: |
             AUTH_URL=http://clothes-alb-201777499.us-east-1.elb.amazonaws.com/auth
             CATALOG_URL=http://clothes-alb-201777499.us-east-1.elb.amazonaws.com/catalog
@@ -193,7 +199,7 @@ jobs:
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ secrets.AWS_REGION || 'eu-west-3' }}
+          aws-region: ${{ secrets.AWS_REGION }}
 
       - name: Login to Amazon ECR
         if: matrix.run_build == 'true' && github.ref == 'refs/heads/main' && github.event_name == 'push'
@@ -209,3 +215,29 @@ jobs:
           docker tag ${{ matrix.image_name }}:$IMAGE_TAG $ECR_REGISTRY/${{ matrix.image_name }}:$IMAGE_TAG
           docker tag ${{ matrix.image_name }}:$IMAGE_TAG $ECR_REGISTRY/${{ matrix.image_name }}:latest
           docker push -a $ECR_REGISTRY/${{ matrix.image_name }}
+
+  # JOB 5 : Ordonnancement du déploiement séquentiel sur le cluster AWS ECS
+  deploy-to-production:
+    name: Trigger AWS ECS Rolling Update
+    needs: [build-and-deploy]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      # Exécuté une seule fois en fin de pipeline pour éviter le spam d'API et le Rate Limiting AWS
+      - name: Force ECS Deployment with New Artifacts
+        run: |
+          aws ecs update-service --cluster clothes-cluster --service clothes-auth --force-new-deployment
+          aws ecs update-service --cluster clothes-cluster --service clothes-catalog --force-new-deployment
+          aws ecs update-service --cluster clothes-cluster --service clothes-rental --force-new-deployment
+          aws ecs update-service --cluster clothes-cluster --service clothes-admin --force-new-deployment
+          aws ecs update-service --cluster clothes-cluster --service clothes-frontend --force-new-deployment

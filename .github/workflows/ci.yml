@@ -92,8 +92,10 @@ jobs:
 
       - name: Run Security Tests via Pytest
         run: |
-          # CORRECTION : Injection de la variable d'environnement pour neutraliser le KeyError de l'application
-          JWT_SECRET_KEY="ci_safety_key_override" PYTHONPATH=.:services/auth pytest services/auth/tests/ -v
+          AUTH_SERVICE_PORT="5001" \
+          JWT_SECRET_KEY="ci_safety_key_override" \
+          PYTHONPATH=.:services/auth \
+          pytest services/auth/tests/ -v
 
   build-and-deploy:
     name: Build & Scan - ${{ matrix.service }}

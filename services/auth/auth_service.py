@@ -135,6 +135,27 @@ def verify_token():
 def health():
     return jsonify({"status": "ok"}), 200
 
+def init_db():
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS users (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            name VARCHAR(100),
+            email VARCHAR(100) UNIQUE,
+            password VARCHAR(255),
+            role VARCHAR(20) DEFAULT 'customer',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+init_db()
+
 if __name__ == "__main__":
     print(f"Auth Service running on http://localhost:{AUTH_SERVICE_PORT}")
     app.run(port=AUTH_SERVICE_PORT, host="0.0.0.0", debug=FLASK_DEBUG)

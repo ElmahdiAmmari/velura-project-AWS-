@@ -185,6 +185,28 @@ def return_item(rental_id):
 def health():
     return jsonify({"status": "ok"}), 200
 
+def init_db():
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS rentals (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            user_id INT,
+            product_id INT,
+            start_date DATE,
+            end_date DATE,
+            status VARCHAR(50),
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+init_db()
+
 if __name__ == "__main__":
     print(f"📦 Rental Service running on http://localhost:{RENTAL_SERVICE_PORT}")
     app.run(port=RENTAL_SERVICE_PORT, host="0.0.0.0", debug=FLASK_DEBUG)

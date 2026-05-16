@@ -173,6 +173,26 @@ def add_item(current_user):
 def health():
     return jsonify({"status": "ok"}), 200
 
+def init_db():
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS products (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            name VARCHAR(255),
+            price DECIMAL(10,2),
+            description TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
+    conn.commit()
+    cursor.close()
+    conn.close()
+
+init_db()
+
 if __name__ == "__main__":
     print(f"👗 Catalog Service running on http://localhost:{CATALOG_SERVICE_PORT}")
     app.run(port=CATALOG_SERVICE_PORT, host="0.0.0.0", debug=FLASK_DEBUG)

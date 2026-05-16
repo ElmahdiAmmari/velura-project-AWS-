@@ -2,9 +2,9 @@ name: CI/CD Velura Production Pipeline
 
 on:
   push:
-    branches: [ "main", "develop", "mista" ]
+    branches: [ "main", "mista" ]
   pull_request:
-    branches: [ "main", "develop" ]
+    branches: [ "main" ]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -48,6 +48,8 @@ jobs:
             frontend:
               - 'frontend/**'
               - '.github/workflows/ci.yml'
+            filebeat:
+              - 'infra/docker/filebeat-image/**'
 
   linting:
     name: Python Code Quality
@@ -102,28 +104,34 @@ jobs:
           - service: auth
             context: .
             file: services/auth/Dockerfile
-            image_name: velura-auth
+            image_name: clothes-auth-service
             run_build: ${{ needs.detect-changes.outputs.auth }}
           - service: catalog
             context: .
             file: services/catalog/Dockerfile
-            image_name: velura-catalog
+            image_name: clothes-catalog-service
             run_build: ${{ needs.detect-changes.outputs.catalog }}
           - service: rental
             context: .
             file: services/rental/Dockerfile
-            image_name: velura-rental
+            image_name: clothes-rental-service
             run_build: ${{ needs.detect-changes.outputs.rental }}
           - service: admin
             context: .
             file: services/admin/Dockerfile
-            image_name: velura-admin
+            image_name: clothes-admin-service
             run_build: ${{ needs.detect-changes.outputs.admin }}
           - service: frontend
             context: frontend     # <-- ON CHANGE LE CONTEXTE ICI
             file: frontend/Dockerfile
-            image_name: velura-frontend
+            image_name: clothes-frontend
             run_build: ${{ needs.detect-changes.outputs.frontend }}
+          - service: filebeat
+            context: infra/docker/filebeat-image
+            file: infra/docker/filebeat-image/Dockerfile
+            image_name: clothes-filebeat
+            run_build: ${{ needs.detect-changes.outputs.filebeat }} 
+            # Note : Si tu n'utilises pas le job detect-changes, mets simplement 'true'
 
     steps:
       - name: Checkout Code

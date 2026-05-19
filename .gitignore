@@ -16,3 +16,9 @@ venv/
 # OS
 .DS_Store
 Thumbs.db
+
+# Terraform secrets
+terraform.tfvars
+*.tfvars
+.terraform/
+terraform.tfstate*

@@ -1,0 +1,35 @@
+# Copy this file to terraform.tfvars and fill in your real values.
+# Do not commit terraform.tfvars to source control.
+
+# AWS account
+aws_account_id = "<AWS_ACCOUNT_ID>"
+
+# Database
+# Local .env mapping:
+#   MYSQL_USER -> db_username
+#   MYSQL_PASSWORD -> db_password
+#   MYSQL_DATABASE -> db_name
+# RDS host is created by Terraform and injected into app secrets.
+db_username = "rental_user"
+db_password = "change_me_strong_app_password"
+db_name     = "clothes_rental"
+
+# Secrets
+# Local .env mapping:
+#   JWT_SECRET_KEY -> jwt_secret_key
+#   ELASTIC_PASSWORD -> elastic_password
+#   KIBANA_PASSWORD -> kibana_password
+#   KIBANA_ENCRYPTION_KEY -> kibana_encryption_key
+jwt_secret_key        = "change_me_generate_with_openssl_rand_hex_32"
+elastic_password      = "change_me_strong_elastic_password"
+kibana_password       = "change_me_strong_kibana_password"
+kibana_encryption_key = "change_me_exactly_32_chars_key!!"
+
+# Image URIs
+# After first terraform apply, fill these with the ECR image URLs from outputs.
+image_auth     = ""
+image_catalog  = ""
+image_rental   = ""
+image_admin    = ""
+image_frontend = ""
+image_filebeat = ""

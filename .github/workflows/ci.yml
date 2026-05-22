@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [ "main" ]
 
+# ← CHANGED: set to 'true' to re-enable AWS builds & deployments when infra is up
+env:
+  AWS_DEPLOY_ENABLED: 'false'
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -125,37 +129,37 @@ jobs:
             file: services/auth/Dockerfile
             image_name: clothes-auth-service
             run_build: ${{ needs.detect-changes.outputs.auth }}
-            trivy_exit_code: '1' # Strict
+            trivy_exit_code: '1'
           - service: catalog
             context: .
             file: services/catalog/Dockerfile
             image_name: clothes-catalog-service
             run_build: ${{ needs.detect-changes.outputs.catalog }}
-            trivy_exit_code: '1' # Strict
+            trivy_exit_code: '1'
           - service: rental
             context: .
             file: services/rental/Dockerfile
             image_name: clothes-rental-service
             run_build: ${{ needs.detect-changes.outputs.rental }}
-            trivy_exit_code: '1' # Strict
+            trivy_exit_code: '1'
           - service: admin
             context: .
             file: services/admin/Dockerfile
             image_name: clothes-admin-service
             run_build: ${{ needs.detect-changes.outputs.admin }}
-            trivy_exit_code: '1' # Strict
+            trivy_exit_code: '1'
           - service: frontend
             context: frontend
             file: frontend/Dockerfile
             image_name: clothes-frontend
             run_build: ${{ needs.detect-changes.outputs.frontend }}
-            trivy_exit_code: '1' # Strict
+            trivy_exit_code: '1'
           - service: filebeat
             context: infra/docker/filebeat-image
             file: infra/docker/filebeat-image/Dockerfile
             image_name: clothes-filebeat
             run_build: ${{ needs.detect-changes.outputs.filebeat }}
-            trivy_exit_code: '0' # Non-bloquant pour l'outil tiers Elastic
+            trivy_exit_code: '0'
 
     steps:
       - name: Checkout Code
@@ -193,8 +197,9 @@ jobs:
           vuln-type: 'os,library'
           severity: 'CRITICAL,HIGH'
 
+      # ← CHANGED: AWS steps only run when AWS_DEPLOY_ENABLED is 'true'
       - name: Configure AWS Credentials
-        if: matrix.run_build == 'true' && github.ref == 'refs/heads/main' && github.event_name == 'push'
+        if: matrix.run_build == 'true' && github.ref == 'refs/heads/main' && github.event_name == 'push' && env.AWS_DEPLOY_ENABLED == 'true'
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
@@ -202,12 +207,12 @@ jobs:
           aws-region: ${{ secrets.AWS_REGION }}
 
       - name: Login to Amazon ECR
-        if: matrix.run_build == 'true' && github.ref == 'refs/heads/main' && github.event_name == 'push'
+        if: matrix.run_build == 'true' && github.ref == 'refs/heads/main' && github.event_name == 'push' && env.AWS_DEPLOY_ENABLED == 'true'
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
       - name: Push Image to AWS ECR
-        if: matrix.run_build == 'true' && github.ref == 'refs/heads/main' && github.event_name == 'push'
+        if: matrix.run_build == 'true' && github.ref == 'refs/heads/main' && github.event_name == 'push' && env.AWS_DEPLOY_ENABLED == 'true'
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           IMAGE_TAG: ${{ github.sha }}
@@ -217,11 +222,12 @@ jobs:
           docker push -a $ECR_REGISTRY/${{ matrix.image_name }}
 
   # JOB 5 : Ordonnancement du déploiement séquentiel sur le cluster AWS ECS
+  # ← CHANGED: entire job gated by AWS_DEPLOY_ENABLED
   deploy-to-production:
     name: Trigger AWS ECS Rolling Update
     needs: [build-and-deploy]
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push' && vars.AWS_DEPLOY_ENABLED == 'true'
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -233,7 +239,6 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ secrets.AWS_REGION }}
 
-      # Exécuté une seule fois en fin de pipeline pour éviter le spam d'API et le Rate Limiting AWS
       - name: Force ECS Deployment with New Artifacts
         run: |
           aws ecs update-service --cluster clothes-cluster --service clothes-auth --force-new-deployment
